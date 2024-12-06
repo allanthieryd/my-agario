@@ -30,6 +30,37 @@ function generatePoints() {
   }
 }
 
+function checkPlayerCollisions() {
+  for (let i = 0; i < players.length; i++) {
+    for (let j = i + 1; j < players.length; j++) {
+      const playerA = players[i];
+      const playerB = players[j];
+      const dx = playerA.x - playerB.x;
+      const dy = playerA.y - playerB.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Si la distance entre les joueurs est inférieure à la taille de l'un des joueurs
+      // et que le joueur A est plus gros que le joueur B
+      if (distance < playerA.size + playerB.size) {
+        if (playerA.size > playerB.size) {
+          // Le joueur A mange le joueur B
+          playerA.size += playerB.size; // Augmenter la taille du joueur A
+          players = players.filter(p => p.id !== playerB.id); // Supprimer le joueur B
+          // Envoyer l'événement de "mort" au joueur B
+          io.to(playerB.id).emit('die');
+        } else if (playerB.size > playerA.size) {
+          // Le joueur B mange le joueur A
+          playerB.size += playerA.size; // Augmenter la taille du joueur B
+          players = players.filter(p => p.id !== playerA.id); // Supprimer le joueur A
+          // Envoyer l'événement de "mort" au joueur A
+          io.to(playerA.id).emit('die');
+        }
+      }
+    }
+  }
+}
+
+
 app.use(express.static('public')); // Dossier pour les fichiers frontend
 
 // Gérer la connexion des clients
@@ -55,6 +86,8 @@ io.on('connection', (socket) => {
       player.x = data.x;
       player.y = data.y;
     }
+
+    checkPlayerCollisions();
     // Diffuser la mise à jour des joueurs à tous les clients
     io.emit('update', { players, points });
   });

@@ -30,6 +30,28 @@ socket.on('update', (data) => {
   draw();
 });
 
+socket.on('die', () => {
+  player = null;
+
+  const message = document.createElement('div');
+  message.textContent = 'Mangé...';
+  message.style.position = 'absolute';
+  message.style.top = '50%';
+  message.style.left = '50%';
+  message.style.transform = 'translate(-50%, -50%)';
+  message.style.fontSize = '24px';
+  message.style.color = 'red';
+  message.style.fontWeight = 'bold';
+  message.style.zIndex = '1000';
+
+  document.body.appendChild(message);
+
+  setTimeout(() => {
+    message.remove();
+  }, 3000);
+});
+
+
 // Contrôles du joueur
 window.addEventListener('mousemove', (e) => {
   const x = e.clientX;
@@ -49,10 +71,10 @@ function drawGrid() {
   const offsetX = player.x - canvas.width / 2;
   const offsetY = player.y - canvas.height / 2;
 
-  // Adapter la taille des carrés de la grille en fonction de la taille du joueur
-  const adjustedGridSize = gridSize * (player.size / 20);  // Le facteur de zoom s'ajuste ici
+  // Retirer le facteur player.size ici pour que la grille reste constante
+  const adjustedGridSize = gridSize;  // Taille fixe des carreaux
 
-  // Dessiner les lignes de la grille avec le facteur de zoom ajusté
+  // Dessiner les lignes de la grille sans tenir compte de la taille du joueur
   for (let y = -offsetY % adjustedGridSize; y < canvas.height; y += adjustedGridSize) {
     ctx.beginPath();
     ctx.moveTo(0, y);
@@ -67,6 +89,7 @@ function drawGrid() {
     ctx.stroke();
   }
 }
+
 
 
 // Dessiner les points à consommer
@@ -91,13 +114,30 @@ function checkCollision() {
     const dx = player.x - point.x;
     const dy = player.y - point.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    // Si la distance est inférieure à la taille du joueur + la taille du point, il mange le point
     if (distance < player.size + 5) {
-      points.splice(index, 1); // Supprimer le point mangé
-      player.size += 1; // Augmenter la taille du joueur plus lentement
-      player.speed = Math.max(1, 1 / (player.size / 20)); // Ralentir la vitesse en fonction de la taille
-      socket.emit('sizeUpdate', player.size); // Envoyer la nouvelle taille au serveur
-      generatePoints(); // Régénérer un nouveau point à une position aléatoire
+      points.splice(index, 1);
+      player.size += 1;
+      player.speed = 1;
+      player.speed = Math.max(1, 1 / (player.size / 20));
+      socket.emit('sizeUpdate', player.size);
+      generatePoints();
+    }
+  });
+
+  // Vérifier les collisions entre le joueur local et les autres joueurs
+  players.forEach((p) => {
+    if (p.id !== player.id) {
+      const dx = player.x - p.x;
+      const dy = player.y - p.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < player.size + p.size) {
+        if (player.size > p.size) {
+          player.size += 1;
+          socket.emit('sizeUpdate', player.size);
+          players = players.filter(otherPlayer => otherPlayer.id !== p.id);
+          delete players[player.id]
+        }
+      }
     }
   });
 }
