@@ -1,4 +1,4 @@
-const socket = io();
+const socket = io(); 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -7,7 +7,7 @@ canvas.height = window.innerHeight;
 
 // Variables de jeu
 let players = [];
-let player = { id: null, x: 0, y: 0, size: 10 };
+let player = { id: null, x: 0, y: 0, size: 10, targetX: 0, targetY: 0, speed: 1 }; // Ajout de targetX, targetY et speed
 let points = []; // Tableau pour les points à manger
 
 // Taille de la grille
@@ -30,33 +30,54 @@ socket.on('update', (data) => {
   draw();
 });
 
-
 // Contrôles du joueur
 window.addEventListener('mousemove', (e) => {
-  const x = e.clientX;
-  const y = e.clientY;
+  // La position cible du joueur est la position de la souris
+  const targetX = e.clientX;
+  const targetY = e.clientY;
   if (player.id) {
-    player.x = x;
-    player.y = y;
-    socket.emit('move', { x, y });
+    player.targetX = targetX;
+    player.targetY = targetY;
+    socket.emit('move', { x: targetX, y: targetY });
   }
 });
 
+// Calculer la direction et le déplacement progressif
+function movePlayer() {
+  // Calculer la différence entre la position actuelle et la position cible
+  const dx = player.targetX - player.x;
+  const dy = player.targetY - player.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  // Si la distance est supérieure à la vitesse du joueur, se déplacer progressivement
+  if (distance > player.speed) {
+    const angle = Math.atan2(dy, dx); // Calculer l'angle pour se diriger vers la souris
+    player.x += player.speed * Math.cos(angle); // Déplacer le joueur dans la direction de la souris
+    player.y += player.speed * Math.sin(angle);
+  } else {
+    // Si le joueur est proche de la cible, on peut le positionner directement à la souris
+    player.x = player.targetX;
+    player.y = player.targetY;
+  }
+}
+
 // Dessiner la grille
 function drawGrid() {
-  ctx.strokeStyle = '#d3d3d3'; // Couleur des lignes de la grille
+  ctx.strokeStyle = '#000000';
   ctx.lineWidth = 0.5;
-  
-  // Dessiner les lignes horizontales
-  for (let y = 0; y < canvas.height; y += gridSize) {
+
+  const offsetX = player.x - canvas.width / 2;
+  const offsetY = player.y - canvas.height / 2;
+
+  // Dessiner les lignes de la grille en prenant en compte le décalage
+  for (let y = -offsetY % gridSize; y < canvas.height; y += gridSize) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(canvas.width, y);
     ctx.stroke();
   }
-  
-  // Dessiner les lignes verticales
-  for (let x = 0; x < canvas.width; x += gridSize) {
+
+  for (let x = -offsetX % gridSize; x < canvas.width; x += gridSize) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, canvas.height);
@@ -66,10 +87,12 @@ function drawGrid() {
 
 // Dessiner les points à consommer
 function drawPoints() {
-  ctx.fillStyle = 'green'; // Couleur des points
   points.forEach(p => {
+    const offsetX = player.x - canvas.width / 2;
+    const offsetY = player.y - canvas.height / 2;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.arc(p.x - offsetX, p.y - offsetY, 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.closePath();
   });
@@ -92,11 +115,10 @@ function checkCollision() {
   });
 }
 
-
 // Générer des points aléatoires
 function generatePoints() {
   // Créer un point à chaque appel de la fonction pour en avoir plusieurs sur la carte
-  if (points.length < 10) { // Limiter le nombre de points à 10
+  if (points.length < 1000) { // Limiter le nombre de points à 10
     const x = Math.random() * (canvas.width - 20) + 10; // Position aléatoire
     const y = Math.random() * (canvas.height - 20) + 10;
     points.push({ x, y });
@@ -108,20 +130,25 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid(); // Dessiner la grille
   drawPoints(); // Dessiner les points
-  
+
+  // Dessiner les joueurs en prenant en compte l'offset
   players.forEach(p => {
+    const offsetX = player.x - canvas.width / 2;
+    const offsetY = player.y - canvas.height / 2;
+
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.arc(p.x - offsetX, p.y - offsetY, p.size, 0, Math.PI * 2);
     ctx.fillStyle = p.id === socket.id ? 'blue' : 'red';
     ctx.fill();
     ctx.closePath();
   });
-  
+
   checkCollision(); // Vérifier les collisions entre le joueur et les points
 }
 
 // Animer le jeu
 function gameLoop() {
+  movePlayer(); // Déplacer le joueur
   requestAnimationFrame(gameLoop);
 }
 
